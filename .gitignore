@@ -1,0 +1,15 @@
+# Ignore everything...
+/*
+
+# ...except this file
+!/.gitignore
+
+# ...and the shared/src/commonMain tree
+!shared/
+shared/*
+!shared/src/
+shared/src/*
+!shared/src/commonMain/
+shared/src/commonMain/*
+!shared/src/commonMain/kotlin/
+!shared/src/commonMain/kotlin/**

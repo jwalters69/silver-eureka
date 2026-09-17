@@ -1,0 +1,166 @@
+@startuml ChessGameKmp
+skinparam classAttributeIconSize 0
+skinparam packageStyle rectangle
+skinparam shadowing false
+hide empty members
+
+package "pieces" {
+  interface Piece {
+    +color: Color
+    +type: Char
+    +drawable: DrawableResource
+    +position: IntOffset
+    +getAvailableMoves(pieces: List<Piece>): Set<IntOffset>
+    +encode(): String
+    {static} +decode(encoded: String): Piece
+  }
+
+  enum Color {
+    White
+    Black
+  }
+
+  class Pawn
+  class Rook
+  class Knight
+  class Bishop
+  class Queen
+  class King
+
+  Piece +-- Color
+  Pawn   ..|> Piece
+  Rook   ..|> Piece
+  Knight ..|> Piece
+  Bishop ..|> Piece
+  Queen  ..|> Piece
+  King   ..|> Piece
+}
+
+package "pieces.dsl" {
+  class PieceMovementBuilder {
+    -piece: Piece
+    -pieces: List<Piece>
+    -moves: MutableSet<IntOffset>
+    +straightMoves(movement, maxMovements, canCapture, captureOnly)
+    +diagonalMoves(movement, maxMovements, canCapture, captureOnly)
+    +getLMoves()
+    +build(): Set<IntOffset>
+  }
+
+  enum StraightMovement {
+    Up
+    Down
+    Left
+    Right
+  }
+
+  enum DiagonalMovement {
+    UpRight
+    UpLeft
+    DownRight
+    DownLeft
+  }
+
+  PieceMovementBuilder --> StraightMovement : reads
+  PieceMovementBuilder --> DiagonalMovement : reads
+  Piece ..> PieceMovementBuilder : delegates to via\ngetPieceMoves { }
+}
+
+package "board" {
+  class Board {
+    -_pieces: SnapshotStateList<Piece>
+    +selectedPiece: Piece?
+    +selectedPieceMoves: Set<IntOffset>
+    +playerTurn: Color
+    +moveIncrement: Int
+    +selectPiece(piece: Piece)
+    +moveSelectedPiece(x: Int, y: Int)
+    +getPiece(x: Int, y: Int): Piece?
+    +isAvailableMove(x: Int, y: Int): Boolean
+    +save()
+    -movePiece(piece, position)
+    -removePiece(piece)
+    -switchPlayerTurn()
+    -encode(): String
+  }
+
+  class "WinCheckHelper (functions)" as WinCheckHelper {
+    +isTheKingInThreat(pieces, piece, x, y): Boolean
+    +isCheckmate(pieces, playerTurn): Boolean
+  }
+
+  Board o-- "0..32" Piece : holds
+  WinCheckHelper ..> Piece : inspects moves of
+  WinCheckHelper ..> King : locates
+}
+
+package "settings" {
+  class "boardSettings (object)" as BoardSettings {
+    +Settings
+  }
+}
+
+Board ..> BoardSettings : save() persists\nencoded board
+
+interface "Screen (Voyager)" as Screen {
+  +Content()
+}
+
+package "ui.home" {
+  class "HomeScreenNav (object)" as HomeScreenNav {
+    +Content()
+  }
+  class HomeScreen
+  HomeScreenNav --> HomeScreen : renders
+}
+
+package "ui.game" {
+  class GameScreenNav {
+    +encodedPieces: String
+    +Content()
+  }
+  class GameScreen
+  class BoardUi
+  class BoardCell
+
+  GameScreenNav --> Board : creates via\nrememberBoard()
+  GameScreenNav --> GameScreen : renders
+  GameScreen --> BoardUi
+  BoardUi --> BoardCell
+  BoardUi ..> Board : reads state from
+}
+
+package "ui.load" {
+  class "LoadGameScreenNav (object)" as LoadGameScreenNav {
+    +Content()
+  }
+  class LoadGameScreen
+  LoadGameScreenNav --> LoadGameScreen : renders
+  LoadGameScreen ..> BoardSettings : lists saved games
+}
+
+HomeScreenNav     ..|> Screen
+GameScreenNav     ..|> Screen
+LoadGameScreenNav ..|> Screen
+
+HomeScreen     ..> GameScreenNav     : navigator.push()
+HomeScreen     ..> LoadGameScreenNav : navigator.push()
+LoadGameScreen ..> GameScreenNav     : navigator.push()\n(resume saved game)
+
+note right of Piece
+  Strategy pattern: each piece
+  implements its own move rules
+end note
+
+note right of PieceMovementBuilder
+  Builder-style DSL used inside
+  getAvailableMoves() implementations
+end note
+
+note bottom of Screen
+  Each screen is a self-contained
+  unit pushed onto a single
+  Navigator stack (Voyager lib)
+end note
+
+@enduml
