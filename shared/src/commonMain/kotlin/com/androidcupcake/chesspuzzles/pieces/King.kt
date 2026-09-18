@@ -34,18 +34,22 @@ class King(
         }
         val castling = buildSet {
             if (!context.isCheckCalculation) {
-                if (canCastle(context.pieces, rookX = BoardXCoordinates[7])) add(IntOffset(position.x + 2, position.y))
-                if (canCastle(context.pieces, rookX = BoardXCoordinates[0])) add(IntOffset(position.x - 2, position.y))
+                if (canCastle(context, rookX = BoardXCoordinates[7])) add(IntOffset(position.x + 2, position.y))
+                if (canCastle(context, rookX = BoardXCoordinates[0])) add(IntOffset(position.x - 2, position.y))
             }
         }
         return baseMoves + castling
     }
 
-    private fun canCastle(pieces: List<Piece>, rookX: Int): Boolean {
-        if (hasMoved) return false
-        val rook = pieces.find { it is Rook && it.color == color && it.position == IntOffset(rookX, position.y) }
-            ?: return false
-        if (rook.hasMoved) return false
+    private fun canCastle(context: Piece.MoveContext, rookX: Int): Boolean {
+        val pieces = context.pieces
+        val rights = context.castlingRights
+        val side = if (rookX > position.x) 'K' else 'Q'
+        val char = if (color.isWhite) side else side.lowercaseChar()
+        if (!rights.contains(char)) return false
+
+        if (pieces.none { it is Rook && it.color == color && it.position == IntOffset(rookX, position.y) })
+            return false
 
         val step = if (rookX > position.x) 1 else -1
         val start = if (step == 1) position.x + 1 else rookX + 1

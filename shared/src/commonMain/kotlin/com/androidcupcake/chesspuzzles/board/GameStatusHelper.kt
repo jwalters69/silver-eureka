@@ -15,11 +15,11 @@ fun evaluateGameStatus(
     playerTurn: Piece.Color,
     lastMove: Board.LastMove? = null,
     squaresAttackedByColor: Map<Piece.Color, Set<IntOffset>> = emptyMap(),
+    enPassantTarget: IntOffset? = null,
+    castlingRights: String = ""
 ): GameStatus {
     val inCheck = isKingInCheck(pieces, playerTurn, lastMove, squaresAttackedByColor)
-    val legalMove = hasAnyLegalMove(pieces, playerTurn, lastMove)
-    // TODO: DELETE
-    //println("$playerTurn in Check?: $inCheck")
+    val legalMove = hasAnyLegalMove(pieces, playerTurn, lastMove, enPassantTarget, castlingRights)
     return GameStatus(inCheck, legalMove)
 }
 
@@ -28,7 +28,9 @@ fun isTheKingInThreat(
     piece: Piece,
     x: Int,
     y: Int,
-    lastMove: Board.LastMove? = null
+    lastMove: Board.LastMove? = null,
+    enPassantTarget: IntOffset? = null,
+    castlingRights: String = ""
 ): Boolean {
     val piecePosition = piece.position
     val targetPosition = IntOffset(x = x, y = y)
@@ -43,7 +45,13 @@ fun isTheKingInThreat(
     val isThreatened = if (king == null) false else {
         simulatedPieces.filter { it.color != piece.color }
             .any { enemy ->
-                enemy.getAvailableMoves(Piece.MoveContext(pieces = simulatedPieces, lastMove = lastMove, isCheckCalculation = true))
+                enemy.getAvailableMoves(Piece.MoveContext(
+                    pieces = simulatedPieces,
+                    lastMove = lastMove,
+                    isCheckCalculation = true,
+                    enPassantTarget = enPassantTarget,
+                    castlingRights = castlingRights
+                ))
                     .any { it == king.position }
             }
     }
@@ -68,18 +76,25 @@ private fun hasAnyLegalMove(
     pieces: List<Piece>,
     playerTurn: Piece.Color,
     lastMove: Board.LastMove?,
+    enPassantTarget: IntOffset? = null,
+    castlingRights: String = ""
 ): Boolean {
     val friendlyPieces = pieces.filter { it.color == playerTurn }
     return friendlyPieces.any { friendlyPiece ->
         friendlyPiece.getAvailableMoves(Piece.MoveContext(
-            pieces = pieces, lastMove = lastMove
+            pieces = pieces,
+            lastMove = lastMove,
+            enPassantTarget = enPassantTarget,
+            castlingRights = castlingRights
         ))
         .any { move -> !isTheKingInThreat(
             pieces = pieces,
             piece = friendlyPiece,
             x = move.x,
             y = move.y,
-            lastMove = lastMove
+            lastMove = lastMove,
+            enPassantTarget = enPassantTarget,
+            castlingRights = castlingRights
         ) }
     }
 }
@@ -88,12 +103,16 @@ fun isCheckmate(
     pieces: List<Piece>,
     playerTurn: Piece.Color,
     lastMove: Board.LastMove? = null,
+    enPassantTarget: IntOffset? = null,
+    castlingRights: String = ""
 ): Boolean =
-    isKingInCheck(pieces, playerTurn, lastMove) && !hasAnyLegalMove(pieces, playerTurn, lastMove)
+    isKingInCheck(pieces, playerTurn, lastMove) && !hasAnyLegalMove(pieces, playerTurn, lastMove, enPassantTarget, castlingRights)
 
 fun isStalemate(
     pieces: List<Piece>,
     playerTurn: Piece.Color,
     lastMove: Board.LastMove? = null,
+    enPassantTarget: IntOffset? = null,
+    castlingRights: String = ""
 ): Boolean =
-    !isKingInCheck(pieces, playerTurn, lastMove) && !hasAnyLegalMove(pieces, playerTurn, lastMove)
+    !isKingInCheck(pieces, playerTurn, lastMove) && !hasAnyLegalMove(pieces, playerTurn, lastMove, enPassantTarget, castlingRights)

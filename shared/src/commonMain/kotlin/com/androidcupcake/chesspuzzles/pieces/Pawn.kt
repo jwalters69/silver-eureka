@@ -29,7 +29,7 @@ class Pawn(
             Res.drawable.pawn_black
 
     override fun getAvailableMoves(context: Piece.MoveContext): Set<IntOffset> {
-        val (pieces, lastMove) = context
+        val (pieces, lastMove, _, enPassantTarget, _) = context
         val isFirstMove =
             position.y == 2 && color.isWhite ||
             position.y == 7 && color.isBlack
@@ -52,7 +52,7 @@ class Pawn(
                 maxMovements = 1,
                 captureOnly = true,
             )
-            addMove(enPassantTarget(lastMove))
+            addMove(enPassantTarget ?: enPassantTarget(lastMove))
         }
     }
     private fun enPassantTarget(lastMove: Board.LastMove?): IntOffset? {

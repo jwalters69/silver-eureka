@@ -49,6 +49,19 @@ class Board(
         private set
 
     var playerTurn by mutableStateOf(Piece.Color.White)
+        private set
+
+    var castlingRights by mutableStateOf("KQkq")
+        private set
+
+    var enPassantTarget by mutableStateOf<IntOffset?>(null)
+        private set
+
+    var halfmoveClock by mutableIntStateOf(0)
+        private set
+
+    var fullmoveNumber by mutableIntStateOf(1)
+        private set
 
     var winner by mutableStateOf<Piece.Color?>(null)
         private set
@@ -56,10 +69,7 @@ class Board(
         private set
 
     init {
-        _pieces.addAll(
-            decodePieces(encodedPieces = encodedPieces)
-        )
-        updateAttackedSquares()
+        fromFEN(encodedPieces)
     }
     /**
      * User events
@@ -74,10 +84,23 @@ class Board(
         } else {
             selectedPiece = piece
             selectedPieceMoves = piece.getAvailableMoves(
-                context = Piece.MoveContext(pieces = pieces, lastMove = lastMove)
+                context = Piece.MoveContext(
+                    pieces = pieces,
+                    lastMove = lastMove,
+                    enPassantTarget = enPassantTarget,
+                    castlingRights = castlingRights
+                )
             )
             .filterNot {
-                isTheKingInThreat(pieces = pieces, piece = piece, x = it.x, y = it.y, lastMove = lastMove)
+                isTheKingInThreat(
+                    pieces = pieces,
+                    piece = piece,
+                    x = it.x,
+                    y = it.y,
+                    lastMove = lastMove,
+                    enPassantTarget = enPassantTarget,
+                    castlingRights = castlingRights
+                )
             }
             .toSet()
         }
@@ -100,14 +123,15 @@ class Board(
             )
 
             clearSelection()
-            switchPlayerTurn()
             lastMove = LastMove(piece, from, to)
             updateAttackedSquares()
             val status = evaluateGameStatus(
                 pieces = pieces,
                 playerTurn = playerTurn,
                 lastMove = lastMove,
-                squaresAttackedByColor = squaresAttackedByColor
+                squaresAttackedByColor = squaresAttackedByColor,
+                enPassantTarget = enPassantTarget,
+                castlingRights = castlingRights
             )
             when {
                 status.isCheckmate -> {
@@ -134,8 +158,108 @@ class Board(
     fun isAvailableMove(x: Int, y: Int): Boolean =
         selectedPieceMoves.any { it.x == x && it.y == y }
 
+    fun toFEN(): String {
+        val fen = StringBuilder()
+        // 1. Piece placement
+        for (rankIndex in 0 until 8) {
+            val y = 8 - rankIndex
+            var emptySquares = 0
+            for (fileIndex in 0 until 8) {
+                val x = 'A'.code + fileIndex
+                val piece = getPiece(x, y)
+                if (piece == null) {
+                    emptySquares++
+                } else {
+                    if (emptySquares > 0) {
+                        fen.append(emptySquares)
+                        emptySquares = 0
+                    }
+                    fen.append(piece.fenChar)
+                }
+            }
+            if (emptySquares > 0) {
+                fen.append(emptySquares)
+            }
+            if (rankIndex < 7) {
+                fen.append("/")
+            }
+        }
+
+        // 2. Active color
+        fen.append(if (playerTurn.isWhite) " w " else " b ")
+
+        // 3. Castling rights
+        fen.append(if (castlingRights.isEmpty()) "-" else castlingRights)
+
+        // 4. En passant target
+        fen.append(" ")
+        fen.append(enPassantTarget?.let { toUCI(it) } ?: "-")
+
+        // 5. Halfmove clock
+        fen.append(" $halfmoveClock")
+
+        // 6. Fullmove number
+        fen.append(" $fullmoveNumber")
+
+        return fen.toString()
+    }
+
+    fun fromFEN(fen: String) {
+        val parts = fen.split(" ")
+        if (parts.isEmpty()) return
+
+        _pieces.clear()
+        val ranks = parts[0].split("/")
+        for (rankIndex in ranks.indices) {
+            val rank = ranks[rankIndex]
+            val y = 8 - rankIndex
+            var xOffset = 0
+            for (char in rank) {
+                if (char.isDigit()) {
+                    xOffset += char.digitToInt()
+                } else {
+                    val x = 'A'.code + xOffset
+                    _pieces.add(Piece.fromFenChar(char, IntOffset(x, y)))
+                    xOffset++
+                }
+            }
+        }
+
+        if (parts.size > 1) {
+            playerTurn = if (parts[1] == "w") Piece.Color.White else Piece.Color.Black
+        }
+        if (parts.size > 2) {
+            castlingRights = parts[2]
+        }
+        if (parts.size > 3) {
+            enPassantTarget = if (parts[3] == "-") null else fromUCI(parts[3])
+        }
+        if (parts.size > 4) {
+            halfmoveClock = parts[4].toIntOrNull() ?: 0
+        }
+        if (parts.size > 5) {
+            fullmoveNumber = parts[5].toIntOrNull() ?: 1
+        }
+
+        updateAttackedSquares()
+    }
+
+    fun toUCI(offset: IntOffset): String {
+        val file = ('a'.code + (offset.x - 'A'.code)).toChar()
+        val rank = offset.y.toString()
+        return "$file$rank"
+    }
+
+    fun fromUCI(square: String): IntOffset {
+        val file = square[0] - 'a'
+        val rank = square.substring(rankIndex(square)).toInt()
+        return IntOffset('A'.code + file, rank)
+    }
+
+    private fun rankIndex(square: String): Int = if (square.length > 1 && square[1].isDigit()) 1 else 0
+
     fun save() {
-        val encodedBoard = encode()
+        val encodedBoard = toFEN()
         val now = kotlin.time.Clock.System.now()
         val millis = now.toEpochMilliseconds()
 
@@ -146,34 +270,100 @@ class Board(
      * Private Methods
      */
 
+    fun moveUCI(uci: String) {
+        if (uci.length < 4) return
+        val from = fromUCI(uci.substring(0, 2))
+        val to = fromUCI(uci.substring(2, 4))
+        val piece = getPiece(from.x, from.y) ?: return
+
+        movePiece(piece, to)
+    }
+
     private fun movePiece(
         piece: Piece,
         position: IntOffset
     ) {
         val from = piece.position
-        val targetPiece = pieces.find { it.position == position }
+        val targetPiece = getPiece(position.x, position.y)
 
-
-
-        if (targetPiece != null) {
-            removePiece(targetPiece)
-        } else if (piece is Pawn && position.x != from.x) {
-            // diagonal move onto an empty square = en passant
-            pieces.find { it.position == IntOffset(position.x, from.y) }
-                ?.let { removePiece(it) }
+        // FEN updates: Halfmove clock
+        if (piece is Pawn || targetPiece != null) {
+            halfmoveClock = 0
+        } else {
+            halfmoveClock++
         }
 
-        if (piece is King && abs(position.x - from.x) == 2) {
+        // FEN updates: Fullmove number
+        if (playerTurn.isBlack) {
+            fullmoveNumber++
+        }
 
+        // FEN updates: En passant target
+        enPassantTarget = if (piece is Pawn && abs(position.y - from.y) == 2) {
+            IntOffset(from.x, if (playerTurn.isWhite) from.y + 1 else from.y - 1)
+        } else {
+            null
+        }
+
+        // Handle capture
+        if (targetPiece != null) {
+            removePiece(targetPiece)
+            updateCastlingRightsOnCapture(position)
+        } else if (piece is Pawn && position.x != from.x) {
+            // diagonal move onto an empty square = en passant
+            val capturedPawnY = from.y
+            getPiece(position.x, capturedPawnY)?.let { removePiece(it) }
+        }
+
+        // Handle Castling move
+        if (piece is King && abs(position.x - from.x) == 2) {
             val kingSide = position.x > from.x
             val rookFromX = if (kingSide) BoardXCoordinates[7] else BoardXCoordinates[0]
             val rookToX = if (kingSide) position.x - 1 else position.x + 1
-            pieces.find { it is Rook && it.position == IntOffset(rookFromX, from.y) }
-                ?.let { it.position = IntOffset(rookToX, from.y) }
+            getPiece(rookFromX, from.y)?.let { it.position = IntOffset(rookToX, from.y) }
         }
+
+        // Update castling rights on King/Rook move
+        updateCastlingRightsOnMove(piece, from)
 
         piece.position = position
         piece.hasMoved = true
+
+        // Switch turn
+        playerTurn = if (playerTurn.isWhite) Piece.Color.Black else Piece.Color.White
+    }
+
+    private fun updateCastlingRightsOnMove(piece: Piece, from: IntOffset) {
+        if (piece is King) {
+            if (piece.color.isWhite) {
+                castlingRights = castlingRights.replace("K", "").replace("Q", "")
+            } else {
+                castlingRights = castlingRights.replace("k", "").replace("q", "")
+            }
+        } else if (piece is Rook) {
+            val file = from.x
+            if (piece.color.isWhite) {
+                if (file == BoardXCoordinates[7]) castlingRights = castlingRights.replace("K", "")
+                if (file == BoardXCoordinates[0]) castlingRights = castlingRights.replace("Q", "")
+            } else {
+                if (file == BoardXCoordinates[7]) castlingRights = castlingRights.replace("k", "")
+                if (file == BoardXCoordinates[0]) castlingRights = castlingRights.replace("q", "")
+            }
+        }
+        if (castlingRights.isEmpty()) castlingRights = "-"
+    }
+
+    private fun updateCastlingRightsOnCapture(position: IntOffset) {
+        val x = position.x
+        val y = position.y
+        if (y == 1) { // White back rank
+            if (x == BoardXCoordinates[7]) castlingRights = castlingRights.replace("K", "")
+            if (x == BoardXCoordinates[0]) castlingRights = castlingRights.replace("Q", "")
+        } else if (y == 8) { // Black back rank
+            if (x == BoardXCoordinates[7]) castlingRights = castlingRights.replace("k", "")
+            if (x == BoardXCoordinates[0]) castlingRights = castlingRights.replace("q", "")
+        }
+        if (castlingRights.isEmpty()) castlingRights = "-"
     }
 
     private fun removePiece(piece: Piece) {
@@ -202,18 +392,14 @@ class Board(
                         Piece.MoveContext(
                             pieces = pieces,
                             lastMove = lastMove,
-                            isCheckCalculation = true
+                            isCheckCalculation = true,
+                            enPassantTarget = enPassantTarget,
+                            castlingRights = castlingRights
                         )
                     )
                 }
                 .toSet()
         }
-        // TODO: DELETE
-        //println("squaresAttackedByColor: $squaresAttackedByColor")
-    }
-
-    private fun encode(): String {
-        return pieces.joinToString(separator = "") { piece -> piece.encode() }
     }
 
     companion object {

@@ -28,6 +28,9 @@ interface Piece {
 
     val type: Char
 
+    val fenChar: Char
+        get() = if (color.isWhite) type.uppercaseChar() else type.lowercaseChar()
+
     val drawable: DrawableResource
 
     var position: IntOffset
@@ -39,54 +42,27 @@ interface Piece {
     data class MoveContext(
         val pieces: List<Piece>,
         val lastMove: Board.LastMove? = null,
-        val isCheckCalculation: Boolean = false
+        val isCheckCalculation: Boolean = false,
+        val enPassantTarget: IntOffset? = null,
+        val castlingRights: String = ""
     )
     fun getAvailableMoves(context: MoveContext): Set<IntOffset>
 
-    fun encode(): String {
-        // W, B
-        val colorCode = color.name.first()
-
-        return StringBuilder()
-            .append(type)
-            .append(colorCode)
-            .append(position.x - BoardXCoordinates.minOrNull()!!)
-            .append(position.y - BoardYCoordinates.minOrNull()!!)
-            .toString()
-    }
-
     companion object {
-        fun decode(encodedPiece: String): Piece {
-            val (type, color, x, y) = encodedPiece.toCharArray()
-            val pieceColor =
-                Color.entries
-                    .find { it.name.first() == color }
-                    ?: throw IllegalArgumentException("Invalid piece color!")
-            val position =
-                IntOffset(
-                    x = x.digitToInt() + BoardXCoordinates.minOrNull()!!,
-                    y = y.digitToInt() + BoardYCoordinates.minOrNull()!!
-                )
+        fun fromFenChar(fenChar: Char, position: IntOffset): Piece {
+            val color = if (fenChar.isUpperCase()) Color.White else Color.Black
+            val type = fenChar.uppercaseChar()
             return when (type) {
-                Pawn.Type ->
-                    Pawn(pieceColor, position)
-                King.Type ->
-                    King(pieceColor, position)
-                Queen.Type ->
-                    Queen(pieceColor, position)
-                Knight.Type ->
-                    Knight(pieceColor, position)
-                Rook.Type ->
-                    Rook(pieceColor, position)
-                Bishop.Type ->
-                    Bishop(pieceColor, position)
-                else ->
-                    throw IllegalArgumentException("Invalid piece type!")
+                Pawn.Type -> Pawn(color, position)
+                King.Type -> King(color, position)
+                Queen.Type -> Queen(color, position)
+                Knight.Type -> Knight(color, position)
+                Rook.Type -> Rook(color, position)
+                Bishop.Type -> Bishop(color, position)
+                else -> throw IllegalArgumentException("Invalid FEN character: $fenChar")
             }
         }
-        const val EncodedPieceLength = 4
     }
-
 }
 
 
