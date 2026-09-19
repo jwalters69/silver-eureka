@@ -69,6 +69,9 @@ class Board(
         private set
 
     init {
+        //TODO: If fromFen is moved to Constants.kt
+        //Then: Constants.decode(encodedPieces)
+        //Then: updateAttackedSquares (or maybe just leave in decode?)
         fromFEN(encodedPieces)
     }
     /**
@@ -204,6 +207,7 @@ class Board(
         return fen.toString()
     }
 
+    // TODO: Move to constants.kt this replaced decode()
     fun fromFEN(fen: String) {
         val parts = fen.split(" ")
         if (parts.isEmpty()) return
@@ -219,6 +223,7 @@ class Board(
                     xOffset += char.digitToInt()
                 } else {
                     val x = 'A'.code + xOffset
+                    // Move to Constants.kt inside decode()
                     _pieces.add(Piece.fromFenChar(char, IntOffset(x, y)))
                     xOffset++
                 }
@@ -334,20 +339,23 @@ class Board(
     }
 
     private fun updateCastlingRightsOnMove(piece: Piece, from: IntOffset) {
-        if (piece is King) {
-            if (piece.color.isWhite) {
-                castlingRights = castlingRights.replace("K", "").replace("Q", "")
-            } else {
-                castlingRights = castlingRights.replace("k", "").replace("q", "")
+        when (piece) {
+            is King -> {
+                if (piece.color.isWhite) {
+                    castlingRights = castlingRights.replace("K", "").replace("Q", "")
+                } else {
+                    castlingRights = castlingRights.replace("k", "").replace("q", "")
+                }
             }
-        } else if (piece is Rook) {
-            val file = from.x
-            if (piece.color.isWhite) {
-                if (file == BoardXCoordinates[7]) castlingRights = castlingRights.replace("K", "")
-                if (file == BoardXCoordinates[0]) castlingRights = castlingRights.replace("Q", "")
-            } else {
-                if (file == BoardXCoordinates[7]) castlingRights = castlingRights.replace("k", "")
-                if (file == BoardXCoordinates[0]) castlingRights = castlingRights.replace("q", "")
+            is Rook -> {
+                val file = from.x
+                if (piece.color.isWhite) {
+                    if (file == BoardXCoordinates[7]) castlingRights = castlingRights.replace("K", "")
+                    if (file == BoardXCoordinates[0]) castlingRights = castlingRights.replace("Q", "")
+                } else {
+                    if (file == BoardXCoordinates[7]) castlingRights = castlingRights.replace("k", "")
+                    if (file == BoardXCoordinates[0]) castlingRights = castlingRights.replace("q", "")
+                }
             }
         }
         if (castlingRights.isEmpty()) castlingRights = "-"
@@ -356,12 +364,15 @@ class Board(
     private fun updateCastlingRightsOnCapture(position: IntOffset) {
         val x = position.x
         val y = position.y
-        if (y == 1) { // White back rank
-            if (x == BoardXCoordinates[7]) castlingRights = castlingRights.replace("K", "")
-            if (x == BoardXCoordinates[0]) castlingRights = castlingRights.replace("Q", "")
-        } else if (y == 8) { // Black back rank
-            if (x == BoardXCoordinates[7]) castlingRights = castlingRights.replace("k", "")
-            if (x == BoardXCoordinates[0]) castlingRights = castlingRights.replace("q", "")
+        when(y){
+            1 -> {
+                if (x == BoardXCoordinates[7]) castlingRights = castlingRights.replace("K", "")
+                if (x == BoardXCoordinates[0]) castlingRights = castlingRights.replace("Q", "")
+            }
+            8 -> {
+                if (x == BoardXCoordinates[7]) castlingRights = castlingRights.replace("k", "")
+                if (x == BoardXCoordinates[0]) castlingRights = castlingRights.replace("q", "")
+            }
         }
         if (castlingRights.isEmpty()) castlingRights = "-"
     }
