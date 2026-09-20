@@ -1,7 +1,3 @@
-/*
-    TODO: swap the custom encode()/decode() for real FEN and represent moves in UCI instead of a bespoke format.
-
- */
 package com.androidcupcake.chesspuzzles.pieces
 
 import androidx.compose.ui.unit.IntOffset
@@ -49,7 +45,7 @@ interface Piece {
     fun getAvailableMoves(context: MoveContext): Set<IntOffset>
 
     companion object {
-        fun fromFenChar(fenChar: Char, position: IntOffset): Piece {
+        fun decodeFen(fenChar: Char, position: IntOffset): Piece {
             val color = if (fenChar.isUpperCase()) Color.White else Color.Black
             val type = fenChar.uppercaseChar()
             return when (type) {

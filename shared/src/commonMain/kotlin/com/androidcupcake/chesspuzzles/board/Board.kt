@@ -14,6 +14,7 @@ import com.androidcupcake.chesspuzzles.pieces.Pawn
 import com.russhwolf.settings.set
 import com.androidcupcake.chesspuzzles.settings.boardSettings
 import com.androidcupcake.chesspuzzles.pieces.Piece
+import com.androidcupcake.chesspuzzles.pieces.Piece.Color
 import com.androidcupcake.chesspuzzles.pieces.Rook
 import kotlin.math.abs
 
@@ -72,7 +73,14 @@ class Board(
         //TODO: If fromFen is moved to Constants.kt
         //Then: Constants.decode(encodedPieces)
         //Then: updateAttackedSquares (or maybe just leave in decode?)
-        fromFEN(encodedPieces)
+        //fromFEN(encodedPieces)
+        _pieces.addAll(
+            decodePieces(
+                encodedPieces = encodedPieces,
+                applyFenMetadata = ::applyFenMetadata
+            )
+        )
+        updateAttackedSquares()
     }
     /**
      * User events
@@ -161,110 +169,8 @@ class Board(
     fun isAvailableMove(x: Int, y: Int): Boolean =
         selectedPieceMoves.any { it.x == x && it.y == y }
 
-    fun toFEN(): String {
-        val fen = StringBuilder()
-        // 1. Piece placement
-        for (rankIndex in 0 until 8) {
-            val y = 8 - rankIndex
-            var emptySquares = 0
-            for (fileIndex in 0 until 8) {
-                val x = 'A'.code + fileIndex
-                val piece = getPiece(x, y)
-                if (piece == null) {
-                    emptySquares++
-                } else {
-                    if (emptySquares > 0) {
-                        fen.append(emptySquares)
-                        emptySquares = 0
-                    }
-                    fen.append(piece.fenChar)
-                }
-            }
-            if (emptySquares > 0) {
-                fen.append(emptySquares)
-            }
-            if (rankIndex < 7) {
-                fen.append("/")
-            }
-        }
-
-        // 2. Active color
-        fen.append(if (playerTurn.isWhite) " w " else " b ")
-
-        // 3. Castling rights
-        fen.append(if (castlingRights.isEmpty()) "-" else castlingRights)
-
-        // 4. En passant target
-        fen.append(" ")
-        fen.append(enPassantTarget?.let { toUCI(it) } ?: "-")
-
-        // 5. Halfmove clock
-        fen.append(" $halfmoveClock")
-
-        // 6. Fullmove number
-        fen.append(" $fullmoveNumber")
-
-        return fen.toString()
-    }
-
-    // TODO: Move to constants.kt this replaced decode()
-    fun fromFEN(fen: String) {
-        val parts = fen.split(" ")
-        if (parts.isEmpty()) return
-
-        _pieces.clear()
-        val ranks = parts[0].split("/")
-        for (rankIndex in ranks.indices) {
-            val rank = ranks[rankIndex]
-            val y = 8 - rankIndex
-            var xOffset = 0
-            for (char in rank) {
-                if (char.isDigit()) {
-                    xOffset += char.digitToInt()
-                } else {
-                    val x = 'A'.code + xOffset
-                    // Move to Constants.kt inside decode()
-                    _pieces.add(Piece.fromFenChar(char, IntOffset(x, y)))
-                    xOffset++
-                }
-            }
-        }
-
-        if (parts.size > 1) {
-            playerTurn = if (parts[1] == "w") Piece.Color.White else Piece.Color.Black
-        }
-        if (parts.size > 2) {
-            castlingRights = parts[2]
-        }
-        if (parts.size > 3) {
-            enPassantTarget = if (parts[3] == "-") null else fromUCI(parts[3])
-        }
-        if (parts.size > 4) {
-            halfmoveClock = parts[4].toIntOrNull() ?: 0
-        }
-        if (parts.size > 5) {
-            fullmoveNumber = parts[5].toIntOrNull() ?: 1
-        }
-
-        updateAttackedSquares()
-    }
-
-    fun toUCI(offset: IntOffset): String {
-        val file = ('a'.code + (offset.x - 'A'.code)).toChar()
-        val rank = offset.y.toString()
-        return "$file$rank"
-    }
-
-    fun fromUCI(square: String): IntOffset {
-        val file = square[0] - 'a'
-        val rank = square.substring(rankIndex(square)).toInt()
-        return IntOffset('A'.code + file, rank)
-    }
-
-    private fun rankIndex(square: String): Int = if (square.length > 1 && square[1].isDigit()) 1 else 0
-
     fun save() {
-        val encodedBoard = toFEN()
+        val encodedBoard = encodeFEN()
         val now = kotlin.time.Clock.System.now()
         val millis = now.toEpochMilliseconds()
 
@@ -274,6 +180,7 @@ class Board(
     /**
      * Private Methods
      */
+    private fun rankIndex(square: String): Int = if (square.length > 1 && square[1].isDigit()) 1 else 0
 
     fun moveUCI(uci: String) {
         if (uci.length < 4) return
@@ -410,6 +317,82 @@ class Board(
                     )
                 }
                 .toSet()
+        }
+    }
+
+    private fun encodeFEN(): String {
+        val fen = StringBuilder()
+        // 1. Piece placement
+        for (rankIndex in 0 until 8) {
+            val y = 8 - rankIndex
+            var emptySquares = 0
+            for (fileIndex in 0 until 8) {
+                val x = 'A'.code + fileIndex
+                val piece = getPiece(x, y)
+                if (piece == null) {
+                    emptySquares++
+                } else {
+                    if (emptySquares > 0) {
+                        fen.append(emptySquares)
+                        emptySquares = 0
+                    }
+                    fen.append(piece.fenChar)
+                }
+            }
+            if (emptySquares > 0) {
+                fen.append(emptySquares)
+            }
+            if (rankIndex < 7) {
+                fen.append("/")
+            }
+        }
+
+        // 2. Active color
+        fen.append(if (playerTurn.isWhite) " w " else " b ")
+
+        // 3. Castling rights
+        fen.append(if (castlingRights.isEmpty()) "-" else castlingRights)
+
+        // 4. En passant target
+        fen.append(" ")
+        fen.append(enPassantTarget?.let { toUCI(it) } ?: "-")
+
+        // 5. Halfmove clock
+        fen.append(" $halfmoveClock")
+
+        // 6. Fullmove number
+        fen.append(" $fullmoveNumber")
+
+        return fen.toString()
+    }
+
+    private fun toUCI(offset: IntOffset): String {
+        val file = ('a'.code + (offset.x - 'A'.code)).toChar()
+        val rank = offset.y.toString()
+        return "$file$rank"
+    }
+
+    private fun fromUCI(square: String): IntOffset {
+        val file = square[0] - 'a'
+        val rank = square.substring(rankIndex(square)).toInt()
+        return IntOffset('A'.code + file, rank)
+    }
+
+    private fun applyFenMetadata(parts: List<String>): Unit {
+        if (parts.size > 1) {
+            playerTurn = if (parts[1] == "w") Piece.Color.White else Piece.Color.Black
+        }
+        if (parts.size > 2) {
+            castlingRights = parts[2]
+        }
+        if (parts.size > 3) {
+            enPassantTarget = if (parts[3] == "-") null else fromUCI(parts[3])
+        }
+        if (parts.size > 4) {
+            halfmoveClock = parts[4].toIntOrNull() ?: 0
+        }
+        if (parts.size > 5) {
+            fullmoveNumber = parts[5].toIntOrNull() ?: 1
         }
     }
 

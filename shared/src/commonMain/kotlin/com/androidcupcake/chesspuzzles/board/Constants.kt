@@ -3,6 +3,7 @@
  */
 package com.androidcupcake.chesspuzzles.board
 
+import androidx.compose.ui.unit.IntOffset
 import com.androidcupcake.chesspuzzles.pieces.Piece
 
 /**
@@ -22,8 +23,42 @@ val BoardYCoordinates = List(8) {
 const val InitialEncodedPiecesPosition =
     "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 
+//fun decodePieces(
+//    encodedPieces: String
+//): List<Piece> {
+//    return emptyList()
+//}
+
+// add playerTurn, castlingRights, enPassantTarget, halfmoveClock, fullmoveNumber as arguments
 fun decodePieces(
-    encodedPieces: String
+    encodedPieces: String,
+    applyFenMetadata: (List<String>) -> Unit
 ): List<Piece> {
-    return emptyList()
+    val pieces = mutableListOf<Piece>()
+    val parts = encodedPieces.split(" ")
+    if (parts.isEmpty()) throw IllegalArgumentException("Invalid Cannot be Empty")
+
+    //_pieces.clear()
+    val ranks = parts[0].split("/")
+    for (rankIndex in ranks.indices) {
+        val rank = ranks[rankIndex]
+        val y = 8 - rankIndex
+        var xOffset = 0
+        for (char in rank) {
+            if (char.isDigit()) {
+                xOffset += char.digitToInt()
+            } else {
+                val x = 'A'.code + xOffset
+                // Move to Constants.kt inside decode()
+                pieces.add(Piece.decodeFen(
+                    char,
+                    IntOffset(x, y)
+                ))
+                xOffset++
+            }
+        }
+    }
+    applyFenMetadata(parts)
+
+    return pieces
 }
