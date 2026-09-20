@@ -170,7 +170,7 @@ class Board(
         selectedPieceMoves.any { it.x == x && it.y == y }
 
     fun save() {
-        val encodedBoard = encodeFEN()
+        val encodedBoard = encodeToFEN()
         val now = kotlin.time.Clock.System.now()
         val millis = now.toEpochMilliseconds()
 
@@ -189,6 +189,9 @@ class Board(
         val piece = getPiece(from.x, from.y) ?: return
 
         movePiece(piece, to)
+        lastMove = LastMove(piece, from, to)
+        updateAttackedSquares()
+        moveIncrement++
     }
 
     private fun movePiece(
@@ -320,7 +323,7 @@ class Board(
         }
     }
 
-    private fun encodeFEN(): String {
+    fun encodeToFEN(): String {
         val fen = StringBuilder()
         // 1. Piece placement
         for (rankIndex in 0 until 8) {
