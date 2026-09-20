@@ -13,3 +13,5 @@ shared/src/*
 shared/src/commonMain/*
 !shared/src/commonMain/kotlin/
 !shared/src/commonMain/kotlin/**
+shared/src/commonMain/kotlin/**/*.puml
+shared/src/commonMain/kotlin/**/*.md
